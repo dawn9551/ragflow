@@ -15,7 +15,14 @@
 #
 from api.db.services.user_service import TenantService
 from api.settings import database_logger
-from rag.llm import EmbeddingModel, CvModel, ChatModel, RerankModel, Seq2txtModel, TTSModel
+from rag.llm import (
+    EmbeddingModel,
+    CvModel,
+    ChatModel,
+    RerankModel,
+    Seq2txtModel,
+    TTSModel,
+)
 from api.db import LLMType
 from api.db.db_models import DB
 from api.db.db_models import LLMFactories, LLM, TenantLLM
@@ -54,21 +61,40 @@ class TenantLLMService(CommonService):
             LLMFactories.tags,
             cls.model.model_type,
             cls.model.llm_name,
-            cls.model.used_tokens
+            cls.model.used_tokens,
         ]
-        objs = cls.model.select(*fields).join(LLMFactories, on=(cls.model.llm_factory == LLMFactories.name)).where(
-            cls.model.tenant_id == tenant_id, ~cls.model.api_key.is_null()).dicts()
+        objs = (
+            cls.model.select(*fields)
+            .join(LLMFactories, on=(cls.model.llm_factory == LLMFactories.name))
+            .where(cls.model.tenant_id == tenant_id, ~cls.model.api_key.is_null())
+            .dicts()
+        )
 
         return list(objs)
 
     @classmethod
     @DB.connection_context()
-    def model_instance(cls, tenant_id, llm_type,
-                       llm_name=None, lang="Chinese"):
+    def model_instance(cls, tenant_id, llm_type, llm_name=None, lang="Chinese"):
+        """根据租户ID和模型类型获取对应的模型实例
+
+        Args:
+            tenant_id (str): 租户ID
+            llm_type (str): 模型类型,如EMBEDDING/CHAT/IMAGE2TEXT等
+            llm_name (str, optional): 指定的模型名称,默认为None
+            lang (str, optional): 语言,默认为"Chinese"
+
+        Returns:
+            object: 对应类型的模型实例
+
+        Raises:
+            LookupError: 租户不存在或模型未授权时抛出
+        """
+        # 获取租户信息
         e, tenant = TenantService.get_by_id(tenant_id)
         if not e:
             raise LookupError("Tenant not found")
 
+        # 根据模型类型获取对应的模型名称
         if llm_type == LLMType.EMBEDDING.value:
             mdlnm = tenant.embd_id if not llm_name else llm_name
         elif llm_type == LLMType.SPEECH2TEXT.value:
@@ -84,58 +110,97 @@ class TenantLLMService(CommonService):
         else:
             assert False, "LLM type error"
 
+        # 获取模型配置信息
         model_config = cls.get_api_key(tenant_id, mdlnm)
         tmp = mdlnm.split("@")
         fid = None if len(tmp) < 2 else tmp[1]
         mdlnm = tmp[0]
-        if model_config: model_config = model_config.to_dict()
+        if model_config:
+            model_config = model_config.to_dict()
+
+        # 处理特殊模型配置
         if not model_config:
+            # 处理嵌入和重排序模型的特殊情况
             if llm_type in [LLMType.EMBEDDING, LLMType.RERANK]:
-                llm = LLMService.query(llm_name=mdlnm) if not fid else LLMService.query(llm_name=mdlnm, fid=fid)
+                # 根据是否有fid来查询模型信息
+                llm = (
+                    LLMService.query(llm_name=mdlnm)  # 没有fid时直接用模型名查询
+                    if not fid
+                    else LLMService.query(llm_name=mdlnm, fid=fid)  # 有fid时带fid查询
+                )
+
+                # 有道、FastEmbed、BAAI这些厂商的模型支持空API key
                 if llm and llm[0].fid in ["Youdao", "FastEmbed", "BAAI"]:
-                    model_config = {"llm_factory": llm[0].fid, "api_key":"", "llm_name": mdlnm, "api_base": ""}
+                    model_config = {
+                        "llm_factory": llm[0].fid,  # 使用厂商ID作为工厂名
+                        "api_key": "",  # API key置空
+                        "llm_name": mdlnm,  # 使用模型名称
+                        "api_base": "",  # API基础URL置空
+                    }
+
+            # 如果仍然没有配置,继续处理特殊情况
             if not model_config:
+                # flag-embedding模型使用通义千问的配置
                 if mdlnm == "flag-embedding":
-                    model_config = {"llm_factory": "Tongyi-Qianwen", "api_key": "",
-                                "llm_name": llm_name, "api_base": ""}
+                    model_config = {
+                        "llm_factory": "Tongyi-Qianwen",
+                        "api_key": "",
+                        "llm_name": llm_name,
+                        "api_base": "",
+                    }
                 else:
+                    # 如果模型名为空,抛出类型未设置错误
                     if not mdlnm:
                         raise LookupError(f"Type of {llm_type} model is not set.")
+                    # 其他情况抛出模型未授权错误
                     raise LookupError("Model({}) not authorized".format(mdlnm))
 
+        # 根据不同类型返回对应的模型实例
         if llm_type == LLMType.EMBEDDING.value:
             if model_config["llm_factory"] not in EmbeddingModel:
                 return
             return EmbeddingModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+                model_config["api_key"],
+                model_config["llm_name"],
+                base_url=model_config["api_base"],
+            )
 
         if llm_type == LLMType.RERANK:
             if model_config["llm_factory"] not in RerankModel:
                 return
             return RerankModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+                model_config["api_key"],
+                model_config["llm_name"],
+                base_url=model_config["api_base"],
+            )
 
         if llm_type == LLMType.IMAGE2TEXT.value:
             if model_config["llm_factory"] not in CvModel:
                 return
             return CvModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], lang,
-                base_url=model_config["api_base"]
+                model_config["api_key"],
+                model_config["llm_name"],
+                lang,
+                base_url=model_config["api_base"],
             )
 
         if llm_type == LLMType.CHAT.value:
             if model_config["llm_factory"] not in ChatModel:
                 return
             return ChatModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+                model_config["api_key"],
+                model_config["llm_name"],
+                base_url=model_config["api_base"],
+            )
 
         if llm_type == LLMType.SPEECH2TEXT:
             if model_config["llm_factory"] not in Seq2txtModel:
                 return
             return Seq2txtModel[model_config["llm_factory"]](
-                key=model_config["api_key"], model_name=model_config["llm_name"],
+                key=model_config["api_key"],
+                model_name=model_config["llm_name"],
                 lang=lang,
-                base_url=model_config["api_base"]
+                base_url=model_config["api_base"],
             )
         if llm_type == LLMType.TTS:
             if model_config["llm_factory"] not in TTSModel:
@@ -173,9 +238,13 @@ class TenantLLMService(CommonService):
         num = 0
         try:
             for u in cls.query(tenant_id=tenant_id, llm_name=llm_name):
-                num += cls.model.update(used_tokens=u.used_tokens + used_tokens)\
-                    .where(cls.model.tenant_id == tenant_id, cls.model.llm_name == llm_name)\
+                num += (
+                    cls.model.update(used_tokens=u.used_tokens + used_tokens)
+                    .where(
+                        cls.model.tenant_id == tenant_id, cls.model.llm_name == llm_name
+                    )
                     .execute()
+                )
         except Exception as e:
             pass
         return num
@@ -183,92 +252,233 @@ class TenantLLMService(CommonService):
     @classmethod
     @DB.connection_context()
     def get_openai_models(cls):
-        objs = cls.model.select().where(
-            (cls.model.llm_factory == "OpenAI"),
-            ~(cls.model.llm_name == "text-embedding-3-small"),
-            ~(cls.model.llm_name == "text-embedding-3-large")
-        ).dicts()
+        objs = (
+            cls.model.select()
+            .where(
+                (cls.model.llm_factory == "OpenAI"),
+                ~(cls.model.llm_name == "text-embedding-3-small"),
+                ~(cls.model.llm_name == "text-embedding-3-large"),
+            )
+            .dicts()
+        )
         return list(objs)
 
 
 class LLMBundle(object):
+    """LLM模型包装类,提供统一的模型调用接口和token使用统计
+
+    该类封装了不同类型LLM模型的调用方法,包括:
+    - 文本嵌入(encode)
+    - 查询编码(encode_queries)
+    - 相似度计算(similarity)
+    - 图像描述(describe)
+    - 语音识别(transcription)
+    - 语音合成(tts)
+    - 对话(chat)
+
+    Attributes:
+        tenant_id: 租户ID
+        llm_type: LLM模型类型
+        llm_name: 模型名称
+        mdl: 实际的模型实例
+        max_length: 模型支持的最大token长度
+    """
+
     def __init__(self, tenant_id, llm_type, llm_name=None, lang="Chinese"):
+        """初始化LLM模型包装实例
+
+        Args:
+            tenant_id: 租户ID
+            llm_type: LLM模型类型
+            llm_name: 模型名称,默认为None
+            lang: 语言,默认为"Chinese"
+        """
         self.tenant_id = tenant_id
         self.llm_type = llm_type
         self.llm_name = llm_name
+        # 获取模型实例
         self.mdl = TenantLLMService.model_instance(
-            tenant_id, llm_type, llm_name, lang=lang)
+            tenant_id, llm_type, llm_name, lang=lang
+        )
         assert self.mdl, "Can't find model for {}/{}/{}".format(
-            tenant_id, llm_type, llm_name)
+            tenant_id, llm_type, llm_name
+        )
+        # 设置默认最大token长度
         self.max_length = 8192
+        # 从数据库获取实际的最大token长度
         for lm in LLMService.query(llm_name=llm_name):
             self.max_length = lm.max_tokens
             break
-    
+
     def encode(self, texts: list, batch_size=32):
+        """批量编码文本
+
+        Args:
+            texts: 待编码的文本列表
+            batch_size: 批处理大小,默认32
+
+        Returns:
+            tuple: (编码结果, 使用的token数)
+        """
         emd, used_tokens = self.mdl.encode(texts, batch_size)
+        # 更新token使用统计
         if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
+            self.tenant_id, self.llm_type, used_tokens
+        ):
             database_logger.error(
-                "Can't update token usage for {}/EMBEDDING used_tokens: {}".format(self.tenant_id, used_tokens))
+                "Can't update token usage for {}/EMBEDDING used_tokens: {}".format(
+                    self.tenant_id, used_tokens
+                )
+            )
         return emd, used_tokens
 
     def encode_queries(self, query: str):
+        """编码单条查询文本
+
+        Args:
+            query: 查询文本
+
+        Returns:
+            tuple: (编码结果, 使用的token数)
+        """
         emd, used_tokens = self.mdl.encode_queries(query)
         if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
+            self.tenant_id, self.llm_type, used_tokens
+        ):
             database_logger.error(
-                "Can't update token usage for {}/EMBEDDING used_tokens: {}".format(self.tenant_id, used_tokens))
+                "Can't update token usage for {}/EMBEDDING used_tokens: {}".format(
+                    self.tenant_id, used_tokens
+                )
+            )
         return emd, used_tokens
 
     def similarity(self, query: str, texts: list):
+        """计算查询与文本列表的相似度
+
+        Args:
+            query: 查询文本
+            texts: 待比较的文本列表
+
+        Returns:
+            tuple: (相似度结果, 使用的token数)
+        """
         sim, used_tokens = self.mdl.similarity(query, texts)
         if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
+            self.tenant_id, self.llm_type, used_tokens
+        ):
             database_logger.error(
-                "Can't update token usage for {}/RERANK used_tokens: {}".format(self.tenant_id, used_tokens))
+                "Can't update token usage for {}/RERANK used_tokens: {}".format(
+                    self.tenant_id, used_tokens
+                )
+            )
         return sim, used_tokens
 
     def describe(self, image, max_tokens=300):
+        """生成图像描述
+
+        Args:
+            image: 图像数据
+            max_tokens: 最大生成token数,默认300
+
+        Returns:
+            str: 图像描述文本
+        """
         txt, used_tokens = self.mdl.describe(image, max_tokens)
         if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
+            self.tenant_id, self.llm_type, used_tokens
+        ):
             database_logger.error(
-                "Can't update token usage for {}/IMAGE2TEXT used_tokens: {}".format(self.tenant_id, used_tokens))
+                "Can't update token usage for {}/IMAGE2TEXT used_tokens: {}".format(
+                    self.tenant_id, used_tokens
+                )
+            )
         return txt
 
     def transcription(self, audio):
+        """语音识别
+
+        Args:
+            audio: 音频数据
+
+        Returns:
+            str: 识别结果文本
+        """
         txt, used_tokens = self.mdl.transcription(audio)
         if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
+            self.tenant_id, self.llm_type, used_tokens
+        ):
             database_logger.error(
-                "Can't update token usage for {}/SEQUENCE2TXT used_tokens: {}".format(self.tenant_id, used_tokens))
+                "Can't update token usage for {}/SEQUENCE2TXT used_tokens: {}".format(
+                    self.tenant_id, used_tokens
+                )
+            )
         return txt
 
     def tts(self, text):
+        """文本转语音
+
+        Args:
+            text: 待转换文本
+
+        Yields:
+            bytes: 音频数据块
+            或 int: token使用量
+        """
         for chunk in self.mdl.tts(text):
-            if isinstance(chunk,int):
+            if isinstance(chunk, int):
                 if not TenantLLMService.increase_usage(
-                    self.tenant_id, self.llm_type, chunk, self.llm_name):
-                        database_logger.error(
-                            "Can't update token usage for {}/TTS".format(self.tenant_id))
+                    self.tenant_id, self.llm_type, chunk, self.llm_name
+                ):
+                    database_logger.error(
+                        "Can't update token usage for {}/TTS".format(self.tenant_id)
+                    )
                 return
-            yield chunk     
+            yield chunk
 
     def chat(self, system, history, gen_conf):
+        """非流式对话
+
+        Args:
+            system: 系统提示词
+            history: 对话历史
+            gen_conf: 生成配置
+
+        Returns:
+            str: 对话响应文本
+            或 int: token使用量
+        """
         txt, used_tokens = self.mdl.chat(system, history, gen_conf)
         if isinstance(txt, int) and not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens, self.llm_name):
+            self.tenant_id, self.llm_type, used_tokens, self.llm_name
+        ):
             database_logger.error(
-                "Can't update token usage for {}/CHAT llm_name: {}, used_tokens: {}".format(self.tenant_id, self.llm_name, used_tokens))
+                "Can't update token usage for {}/CHAT llm_name: {}, used_tokens: {}".format(
+                    self.tenant_id, self.llm_name, used_tokens
+                )
+            )
         return txt
 
     def chat_streamly(self, system, history, gen_conf):
+        """流式对话
+
+        Args:
+            system: 系统提示词
+            history: 对话历史
+            gen_conf: 生成配置
+
+        Yields:
+            str: 对话响应文本片段
+            或 int: token使用量
+        """
         for txt in self.mdl.chat_streamly(system, history, gen_conf):
             if isinstance(txt, int):
                 if not TenantLLMService.increase_usage(
-                        self.tenant_id, self.llm_type, txt, self.llm_name):
+                    self.tenant_id, self.llm_type, txt, self.llm_name
+                ):
                     database_logger.error(
-                        "Can't update token usage for {}/CHAT llm_name: {}, content: {}".format(self.tenant_id, self.llm_name, txt))
+                        "Can't update token usage for {}/CHAT llm_name: {}, content: {}".format(
+                            self.tenant_id, self.llm_name, txt
+                        )
+                    )
                 return
             yield txt

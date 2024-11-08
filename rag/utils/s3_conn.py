@@ -7,14 +7,15 @@ from io import BytesIO
 from rag.settings import s3_logger
 from rag.utils import singleton
 
+
 @singleton
 class RAGFlowS3(object):
     def __init__(self):
         self.conn = None
-        self.endpoint = os.getenv('ENDPOINT', None)
-        self.access_key = os.getenv('ACCESS_KEY', None)
-        self.secret_key = os.getenv('SECRET_KEY', None)
-        self.region = os.getenv('REGION', None)
+        self.endpoint = os.getenv("ENDPOINT", None)
+        self.access_key = os.getenv("ACCESS_KEY", None)
+        self.secret_key = os.getenv("SECRET_KEY", None)
+        self.region = os.getenv("REGION", None)
         self.__open__()
 
     def __open__(self):
@@ -25,24 +26,18 @@ class RAGFlowS3(object):
             pass
 
         try:
-
-            config = Config(
-                s3={
-                    'addressing_style': 'virtual'
-                }
-            )
+            config = Config(s3={"addressing_style": "virtual"})
 
             self.conn = boto3.client(
-                's3',
+                "s3",
                 endpoint_url=self.endpoint,
                 region_name=self.region,
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
-                config=config
+                config=config,
             )
         except Exception as e:
-            s3_logger.error(
-                "Fail to connect %s " % self.endpoint + str(e))
+            s3_logger.error("Fail to connect %s " % self.endpoint + str(e))
 
     def __close__(self):
         del self.conn
@@ -99,7 +94,7 @@ class RAGFlowS3(object):
         for _ in range(1):
             try:
                 r = self.conn.get_object(Bucket=bucket, Key=fnm)
-                object_data = r['Body'].read()
+                object_data = r["Body"].read()
                 return object_data
             except Exception as e:
                 s3_logger.error(f"fail get {bucket}/{fnm}: " + str(e))
@@ -109,12 +104,10 @@ class RAGFlowS3(object):
 
     def obj_exist(self, bucket, fnm):
         try:
-
             if self.conn.head_object(Bucket=bucket, Key=fnm):
                 return True
         except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-
+            if e.response["Error"]["Code"] == "404":
                 return False
             else:
                 raise
@@ -122,10 +115,11 @@ class RAGFlowS3(object):
     def get_presigned_url(self, bucket, fnm, expires):
         for _ in range(10):
             try:
-                r = self.conn.generate_presigned_url('get_object',
-                                                     Params={'Bucket': bucket,
-                                                             'Key': fnm},
-                                                     ExpiresIn=expires)
+                r = self.conn.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bucket, "Key": fnm},
+                    ExpiresIn=expires,
+                )
 
                 return r
             except Exception as e:

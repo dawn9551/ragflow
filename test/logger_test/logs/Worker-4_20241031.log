@@ -1,0 +1,23 @@
+[DEBUG] [2024-10-31 08:55:36,221] [Worker-4] [simulate_work:17]: Thread 4 is processing step 0
+[INFO] [2024-10-31 08:55:37,400] [Worker-4] [simulate_work:18]: Thread 4 completed step 0
+[ERROR] [2024-10-31 08:55:37,401] [Worker-4] [simulate_work:24]: Thread 4 encountered an error in step 0
+[ERROR] [2024-10-31 08:55:38,254] [Worker-4] [simulate_work:28]: Detailed error information
+Traceback (most recent call last):
+  File "e:\code\ragflow\test\logger_test\test_logger.py", line 26, in simulate_work
+    raise Exception("Simulated error")
+Exception: Simulated error
+[DEBUG] [2024-10-31 08:55:38,455] [Worker-4] [simulate_work:17]: Thread 4 is processing step 1
+[INFO] [2024-10-31 08:55:38,455] [Worker-4] [simulate_work:18]: Thread 4 completed step 1
+[ERROR] [2024-10-31 08:55:38,455] [Worker-4] [simulate_work:24]: Thread 4 encountered an error in step 1
+[ERROR] [2024-10-31 08:55:38,455] [Worker-4] [simulate_work:28]: Detailed error information
+Traceback (most recent call last):
+  File "e:\code\ragflow\test\logger_test\test_logger.py", line 26, in simulate_work
+    raise Exception("Simulated error")
+Exception: Simulated error
+[DEBUG] [2024-10-31 08:55:38,595] [Worker-4] [simulate_work:17]: Thread 4 is processing step 2
+[INFO] [2024-10-31 08:55:38,596] [Worker-4] [simulate_work:18]: Thread 4 completed step 2
+[DEBUG] [2024-10-31 08:55:39,200] [Worker-4] [simulate_work:17]: Thread 4 is processing step 3
+[INFO] [2024-10-31 08:55:39,200] [Worker-4] [simulate_work:18]: Thread 4 completed step 3
+[WARNING] [2024-10-31 08:55:39,202] [Worker-4] [simulate_work:22]: Thread 4 encountered a warning in step 3
+[DEBUG] [2024-10-31 08:55:39,931] [Worker-4] [simulate_work:17]: Thread 4 is processing step 4
+[INFO] [2024-10-31 08:55:39,931] [Worker-4] [simulate_work:18]: Thread 4 completed step 4

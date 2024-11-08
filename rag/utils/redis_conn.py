@@ -12,7 +12,7 @@ class Payload:
         self.__queue_name = queue_name
         self.__group_name = group_name
         self.__msg_id = msg_id
-        self.__message = json.loads(message['message'])
+        self.__message = json.loads(message["message"])
 
     def ack(self):
         try:
@@ -35,19 +35,22 @@ class RedisDB:
 
     def __open__(self):
         try:
-            self.REDIS = redis.StrictRedis(host=self.config["host"].split(":")[0],
-                                     port=int(self.config.get("host", ":6379").split(":")[1]),
-                                     db=int(self.config.get("db", 1)),
-                                     password=self.config.get("password"),
-                                     decode_responses=True)
+            self.REDIS = redis.StrictRedis(
+                host=self.config["host"].split(":")[0],
+                port=int(self.config.get("host", ":6379").split(":")[1]),
+                db=int(self.config.get("db", 1)),
+                password=None
+                if not self.config.get("password", "")
+                else self.config.get("password"),
+                decode_responses=True,
+            )
         except Exception as e:
             logging.warning("Redis can't be connected.")
         return self.REDIS
 
     def health(self):
-
         self.REDIS.ping()
-        a, b = 'xx', 'yy'
+        a, b = "xx", "yy"
         self.REDIS.set(a, b, 3)
 
         if self.REDIS.get(a) == b:
@@ -57,7 +60,8 @@ class RedisDB:
         return self.REDIS is not None
 
     def exist(self, k):
-        if not self.REDIS: return
+        if not self.REDIS:
+            return
         try:
             return self.REDIS.exists(k)
         except Exception as e:
@@ -65,7 +69,8 @@ class RedisDB:
             self.__open__()
 
     def get(self, k):
-        if not self.REDIS: return
+        if not self.REDIS:
+            return
         try:
             return self.REDIS.get(k)
         except Exception as e:
@@ -102,12 +107,31 @@ class RedisDB:
         return False
 
     def queue_product(self, queue, message, exp=settings.SVR_QUEUE_RETENTION) -> bool:
+        """向Redis队列中添加消息
+
+        Args:
+            queue (str): Redis队列名称
+            message (dict): 要发送的消息内容
+            exp (int, optional): 消息过期时间,默认使用settings中的SVR_QUEUE_RETENTION
+
+        Returns:
+            bool: 消息发送成功返回True,失败返回False
+
+        Note:
+            该方法会尝试3次发送消息,每次失败都会记录警告日志
+            消息会被序列化为JSON格式存储
+        """
         for _ in range(3):
             try:
+                # 将消息转换为Redis Stream格式
                 payload = {"message": json.dumps(message)}
+
+                # 创建Redis管道
                 pipeline = self.REDIS.pipeline()
+                # 添加消息到Stream
                 pipeline.xadd(queue, payload)
-                #pipeline.expire(queue, exp)
+                # pipeline.expire(queue, exp)
+                # 执行管道命令
                 pipeline.execute()
                 return True
             except Exception as e:
@@ -115,16 +139,13 @@ class RedisDB:
                 logging.warning("[EXCEPTION]producer" + str(queue) + "||" + str(e))
         return False
 
-    def queue_consumer(self, queue_name, group_name, consumer_name, msg_id=b">") -> Payload:
+    def queue_consumer(
+        self, queue_name, group_name, consumer_name, msg_id=b">"
+    ) -> Payload:
         try:
             group_info = self.REDIS.xinfo_groups(queue_name)
             if not any(e["name"] == group_name for e in group_info):
-                self.REDIS.xgroup_create(
-                    queue_name,
-                    group_name,
-                    id="0",
-                    mkstream=True
-                )
+                self.REDIS.xgroup_create(queue_name, group_name, id="0", mkstream=True)
             args = {
                 "groupname": group_name,
                 "consumername": consumer_name,
@@ -140,10 +161,12 @@ class RedisDB:
             res = Payload(self.REDIS, queue_name, group_name, msg_id, payload)
             return res
         except Exception as e:
-            if 'key' in str(e):
+            if "key" in str(e):
                 pass
             else:
-                logging.warning("[EXCEPTION]consumer: " + str(queue_name) + "||" + str(e))
+                logging.warning(
+                    "[EXCEPTION]consumer: " + str(queue_name) + "||" + str(e)
+                )
         return None
 
     def get_unacked_for(self, consumer_name, queue_name, group_name):
@@ -151,16 +174,27 @@ class RedisDB:
             group_info = self.REDIS.xinfo_groups(queue_name)
             if not any(e["name"] == group_name for e in group_info):
                 return
-            pendings = self.REDIS.xpending_range(queue_name, group_name, min=0, max=10000000000000, count=1, consumername=consumer_name)
-            if not pendings: return
+            pendings = self.REDIS.xpending_range(
+                queue_name,
+                group_name,
+                min=0,
+                max=10000000000000,
+                count=1,
+                consumername=consumer_name,
+            )
+            if not pendings:
+                return
             msg_id = pendings[0]["message_id"]
             msg = self.REDIS.xrange(queue_name, min=msg_id, count=1)
             _, payload = msg[0]
             return Payload(self.REDIS, queue_name, group_name, msg_id, payload)
         except Exception as e:
-            if 'key' in str(e):
+            if "key" in str(e):
                 return
-            logging.warning("[EXCEPTION]xpending_range: " + consumer_name + "||" + str(e))
+            logging.warning(
+                "[EXCEPTION]xpending_range: " + consumer_name + "||" + str(e)
+            )
             self.__open__()
+
 
 REDIS_CONN = RedisDB()

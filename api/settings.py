@@ -21,7 +21,7 @@ from api.utils.log_utils import LoggerFactory, getLogger
 
 # Logger
 LoggerFactory.set_directory(
-    os.path.join(
+    os.path.join(  # \\ragflow\\logs\\api
         get_project_base_directory(),
         "logs",
         "api"))

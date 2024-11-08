@@ -1,0 +1,12 @@
+[DEBUG] [2024-10-31 09:00:15,090] [Worker-3] [simulate_work:17]: Thread 3 is processing step 0
+[INFO] [2024-10-31 09:00:15,092] [Worker-3] [simulate_work:18]: Thread 3 completed step 0
+[DEBUG] [2024-10-31 09:00:15,774] [Worker-3] [simulate_work:17]: Thread 3 is processing step 1
+[INFO] [2024-10-31 09:00:15,774] [Worker-3] [simulate_work:18]: Thread 3 completed step 1
+[WARNING] [2024-10-31 09:00:15,775] [Worker-3] [simulate_work:22]: Thread 3 encountered a warning in step 1
+[DEBUG] [2024-10-31 09:00:22,132] [Worker-3] [simulate_work:17]: Thread 3 is processing step 2
+[INFO] [2024-10-31 09:00:22,132] [Worker-3] [simulate_work:18]: Thread 3 completed step 2
+[DEBUG] [2024-10-31 09:00:22,891] [Worker-3] [simulate_work:17]: Thread 3 is processing step 3
+[INFO] [2024-10-31 09:00:22,892] [Worker-3] [simulate_work:18]: Thread 3 completed step 3
+[DEBUG] [2024-10-31 09:00:24,849] [Worker-3] [simulate_work:17]: Thread 3 is processing step 4
+[INFO] [2024-10-31 09:00:24,849] [Worker-3] [simulate_work:18]: Thread 3 completed step 4
+[WARNING] [2024-10-31 09:00:24,849] [Worker-3] [simulate_work:22]: Thread 3 encountered a warning in step 4
