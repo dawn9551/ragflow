@@ -36,7 +36,7 @@ class TokenStreamingExecutor(Executor):
         generation_config = GenerationConfig(
             **doc.gen_conf,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
+            pad_token_id=tokenizer.eos_token_id,
         )
         generated_ids = self.model.generate(
             inputs.input_ids, generation_config=generation_config
@@ -63,7 +63,7 @@ class TokenStreamingExecutor(Executor):
         generation_config = GenerationConfig(
             **doc.gen_conf,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
+            pad_token_id=tokenizer.eos_token_id,
         )
         for _ in range(max_new_tokens):
             output = self.model.generate(
