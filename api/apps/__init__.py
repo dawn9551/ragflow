@@ -109,7 +109,7 @@ def register_page(page_path):
 
     page_name = page_path.stem.rstrip("_app")
     module_name = ".".join(
-        page_path.parts[page_path.parts.index("api"): -1] + (page_name,)
+        page_path.parts[page_path.parts.index("api") : -1] + (page_name,)
     )
 
     spec = spec_from_file_location(module_name, page_path)

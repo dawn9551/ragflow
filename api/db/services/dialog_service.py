@@ -40,8 +40,7 @@ class DialogService(CommonService):
 
     @classmethod
     @DB.connection_context()
-    def get_list(cls, tenant_id,
-                 page_number, items_per_page, orderby, desc, id, name):
+    def get_list(cls, tenant_id, page_number, items_per_page, orderby, desc, id, name):
         chats = cls.model.select()
         if id:
             chats = chats.where(cls.model.id == id)
@@ -67,7 +66,8 @@ def message_fit_in(msg, max_length=4000):
         tks_cnts = []
         for m in msg:
             tks_cnts.append(
-                {"role": m["role"], "count": num_tokens_from_string(m["content"])})
+                {"role": m["role"], "count": num_tokens_from_string(m["content"])}
+            )
         total = 0
         for m in tks_cnts:
             total += m["count"]
@@ -89,12 +89,12 @@ def message_fit_in(msg, max_length=4000):
     ll2 = num_tokens_from_string(msg_[-1]["content"])
     if ll / (ll + ll2) > 0.8:
         m = msg_[0]["content"]
-        m = encoder.decode(encoder.encode(m)[:max_length - ll2])
+        m = encoder.decode(encoder.encode(m)[: max_length - ll2])
         msg[0]["content"] = m
         return max_length, msg
 
     m = msg_[1]["content"]
-    m = encoder.decode(encoder.encode(m)[:max_length - ll2])
+    m = encoder.decode(encoder.encode(m)[: max_length - ll2])
     msg[1]["content"] = m
     return max_length, msg
 
@@ -102,7 +102,9 @@ def message_fit_in(msg, max_length=4000):
 def llm_id2llm_type(llm_id):
     llm_id, _ = TenantLLMService.split_model_name_and_factory(llm_id)
     fnm = os.path.join(get_project_base_directory(), "conf")
-    llm_factories = json.load(open(os.path.join(fnm, "llm_factories.json"), "r"))
+    llm_factories = json.load(
+        open(os.path.join(fnm, "llm_factories.json"), "r", encoding="utf-8")
+    )
     for llm_factory in llm_factories["factory_llm_infos"]:
         for llm in llm_factory["llm"]:
             if llm_id == llm["llm_name"]:
@@ -136,20 +138,33 @@ def kb_prompt(kbinfos, max_tokens):
 
 
 def chat(dialog, messages, stream=True, **kwargs):
-    assert messages[-1]["role"] == "user", "The last content of this conversation is not from user."
+    assert (
+        messages[-1]["role"] == "user"
+    ), "The last content of this conversation is not from user."
 
     chat_start_ts = timer()
 
     # Get llm model name and model provider name
-    llm_id, model_provider = TenantLLMService.split_model_name_and_factory(dialog.llm_id)
+    llm_id, model_provider = TenantLLMService.split_model_name_and_factory(
+        dialog.llm_id
+    )
 
     # Get llm model instance by model and provide name
-    llm = LLMService.query(llm_name=llm_id) if not model_provider else LLMService.query(llm_name=llm_id, fid=model_provider)
+    llm = (
+        LLMService.query(llm_name=llm_id)
+        if not model_provider
+        else LLMService.query(llm_name=llm_id, fid=model_provider)
+    )
 
     if not llm:
         # Model name is provided by tenant, but not system built-in
-        llm = TenantLLMService.query(tenant_id=dialog.tenant_id, llm_name=llm_id) if not model_provider else \
-            TenantLLMService.query(tenant_id=dialog.tenant_id, llm_name=llm_id, llm_factory=model_provider)
+        llm = (
+            TenantLLMService.query(tenant_id=dialog.tenant_id, llm_name=llm_id)
+            if not model_provider
+            else TenantLLMService.query(
+                tenant_id=dialog.tenant_id, llm_name=llm_id, llm_factory=model_provider
+            )
+        )
         if not llm:
             raise LookupError("LLM(%s) not found" % dialog.llm_id)
         max_tokens = 8192
@@ -161,13 +176,21 @@ def chat(dialog, messages, stream=True, **kwargs):
     kbs = KnowledgebaseService.get_by_ids(dialog.kb_ids)
     embedding_list = list(set([kb.embd_id for kb in kbs]))
     if len(embedding_list) != 1:
-        yield {"answer": "**ERROR**: Knowledge bases use different embedding models.", "reference": []}
-        return {"answer": "**ERROR**: Knowledge bases use different embedding models.", "reference": []}
+        yield {
+            "answer": "**ERROR**: Knowledge bases use different embedding models.",
+            "reference": [],
+        }
+        return {
+            "answer": "**ERROR**: Knowledge bases use different embedding models.",
+            "reference": [],
+        }
 
     embedding_model_name = embedding_list[0]
 
     is_knowledge_graph = all([kb.parser_id == ParserType.KG for kb in kbs])
-    retriever = settings.retrievaler if not is_knowledge_graph else settings.kg_retrievaler
+    retriever = (
+        settings.retrievaler if not is_knowledge_graph else settings.kg_retrievaler
+    )
 
     questions = [m["content"] for m in messages if m["role"] == "user"][-3:]
     attachments = kwargs["doc_ids"].split(",") if "doc_ids" in kwargs else None
@@ -200,7 +223,13 @@ def chat(dialog, messages, stream=True, **kwargs):
     # try to use sql if field mapping is good to go
     if field_map:
         logging.debug("Use SQL to retrieval:{}".format(questions[-1]))
-        ans = use_sql(questions[-1], field_map, dialog.tenant_id, chat_mdl, prompt_config.get("quote", True))
+        ans = use_sql(
+            questions[-1],
+            field_map,
+            dialog.tenant_id,
+            chat_mdl,
+            prompt_config.get("quote", True),
+        )
         if ans:
             yield ans
             return
@@ -212,7 +241,8 @@ def chat(dialog, messages, stream=True, **kwargs):
             raise KeyError("Miss parameter: " + p["key"])
         if p["key"] not in kwargs:
             prompt_config["system"] = prompt_config["system"].replace(
-                "{%s}" % p["key"], " ")
+                "{%s}" % p["key"], " "
+            )
 
     if len(questions) > 1 and prompt_config.get("refine_multiturn"):
         questions = [full_question(dialog.tenant_id, dialog.llm_id, messages)]
@@ -236,29 +266,46 @@ def chat(dialog, messages, stream=True, **kwargs):
             generate_keyword_ts = timer()
 
         tenant_ids = list(set([kb.tenant_id for kb in kbs]))
-        kbinfos = retriever.retrieval(" ".join(questions), embd_mdl, tenant_ids, dialog.kb_ids, 1, dialog.top_n,
-                                      dialog.similarity_threshold,
-                                      dialog.vector_similarity_weight,
-                                      doc_ids=attachments,
-                                      top=dialog.top_k, aggs=False, rerank_mdl=rerank_mdl)
+        kbinfos = retriever.retrieval(
+            " ".join(questions),
+            embd_mdl,
+            tenant_ids,
+            dialog.kb_ids,
+            1,
+            dialog.top_n,
+            dialog.similarity_threshold,
+            dialog.vector_similarity_weight,
+            doc_ids=attachments,
+            top=dialog.top_k,
+            aggs=False,
+            rerank_mdl=rerank_mdl,
+        )
 
     retrieval_ts = timer()
 
     knowledges = kb_prompt(kbinfos, max_tokens)
-    logging.debug(
-        "{}->{}".format(" ".join(questions), "\n->".join(knowledges)))
+    logging.debug("{}->{}".format(" ".join(questions), "\n->".join(knowledges)))
 
     if not knowledges and prompt_config.get("empty_response"):
         empty_res = prompt_config["empty_response"]
-        yield {"answer": empty_res, "reference": kbinfos, "audio_binary": tts(tts_mdl, empty_res)}
+        yield {
+            "answer": empty_res,
+            "reference": kbinfos,
+            "audio_binary": tts(tts_mdl, empty_res),
+        }
         return {"answer": prompt_config["empty_response"], "reference": kbinfos}
 
     kwargs["knowledge"] = "\n\n------\n\n".join(knowledges)
     gen_conf = dialog.llm_setting
 
     msg = [{"role": "system", "content": prompt_config["system"].format(**kwargs)}]
-    msg.extend([{"role": m["role"], "content": re.sub(r"##\d+\$\$", "", m["content"])}
-                for m in messages if m["role"] != "system"])
+    msg.extend(
+        [
+            {"role": m["role"], "content": re.sub(r"##\d+\$\$", "", m["content"])}
+            for m in messages
+            if m["role"] != "system"
+        ]
+    )
     used_token_count, msg = message_fit_in(msg, int(max_tokens * 0.97))
     assert len(msg) >= 2, f"message_fit_in has bug: {msg}"
     prompt = msg[0]["content"]
@@ -266,8 +313,8 @@ def chat(dialog, messages, stream=True, **kwargs):
 
     if "max_tokens" in gen_conf:
         gen_conf["max_tokens"] = min(
-            gen_conf["max_tokens"],
-            max_tokens - used_token_count)
+            gen_conf["max_tokens"], max_tokens - used_token_count
+        )
 
     def decorate_answer(answer):
         nonlocal prompt_config, knowledges, kwargs, kbinfos, prompt, retrieval_ts
@@ -275,18 +322,19 @@ def chat(dialog, messages, stream=True, **kwargs):
         finish_chat_ts = timer()
 
         refs = []
-        if knowledges and (prompt_config.get("quote", True) and kwargs.get("quote", True)):
-            answer, idx = retriever.insert_citations(answer,
-                                                     [ck["content_ltks"]
-                                                      for ck in kbinfos["chunks"]],
-                                                     [ck["vector"]
-                                                      for ck in kbinfos["chunks"]],
-                                                     embd_mdl,
-                                                     tkweight=1 - dialog.vector_similarity_weight,
-                                                     vtweight=dialog.vector_similarity_weight)
+        if knowledges and (
+            prompt_config.get("quote", True) and kwargs.get("quote", True)
+        ):
+            answer, idx = retriever.insert_citations(
+                answer,
+                [ck["content_ltks"] for ck in kbinfos["chunks"]],
+                [ck["vector"] for ck in kbinfos["chunks"]],
+                embd_mdl,
+                tkweight=1 - dialog.vector_similarity_weight,
+                vtweight=dialog.vector_similarity_weight,
+            )
             idx = set([kbinfos["chunks"][int(i)]["doc_id"] for i in idx])
-            recall_docs = [
-                d for d in kbinfos["doc_aggs"] if d["doc_id"] in idx]
+            recall_docs = [d for d in kbinfos["doc_aggs"] if d["doc_id"] in idx]
             if not recall_docs:
                 recall_docs = kbinfos["doc_aggs"]
             kbinfos["doc_aggs"] = recall_docs
@@ -296,7 +344,10 @@ def chat(dialog, messages, stream=True, **kwargs):
                 if c.get("vector"):
                     del c["vector"]
 
-        if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
+        if (
+            answer.lower().find("invalid key") >= 0
+            or answer.lower().find("invalid api") >= 0
+        ):
             answer += " Please set LLM API-Key in 'User Setting -> Model providers -> API-Key'"
         finish_chat_ts = timer()
 
@@ -319,19 +370,26 @@ def chat(dialog, messages, stream=True, **kwargs):
         answer = ""
         for ans in chat_mdl.chat_streamly(prompt, msg[1:], gen_conf):
             answer = ans
-            delta_ans = ans[len(last_ans):]
+            delta_ans = ans[len(last_ans) :]
             if num_tokens_from_string(delta_ans) < 16:
                 continue
             last_ans = answer
-            yield {"answer": answer, "reference": {}, "audio_binary": tts(tts_mdl, delta_ans)}
-        delta_ans = answer[len(last_ans):]
+            yield {
+                "answer": answer,
+                "reference": {},
+                "audio_binary": tts(tts_mdl, delta_ans),
+            }
+        delta_ans = answer[len(last_ans) :]
         if delta_ans:
-            yield {"answer": answer, "reference": {}, "audio_binary": tts(tts_mdl, delta_ans)}
+            yield {
+                "answer": answer,
+                "reference": {},
+                "audio_binary": tts(tts_mdl, delta_ans),
+            }
         yield decorate_answer(answer)
     else:
         answer = chat_mdl.chat(prompt, msg[1:], gen_conf)
-        logging.debug("User: {}|Assistant: {}".format(
-            msg[-1]["content"], answer))
+        logging.debug("User: {}|Assistant: {}".format(msg[-1]["content"], answer))
         res = decorate_answer(answer)
         res["audio_binary"] = tts(tts_mdl, answer)
         yield res
@@ -350,23 +408,26 @@ Please write the SQL, only SQL, without any other explanations or text.
 """.format(
         index_name(tenant_id),
         "\n".join([f"{k}: {v}" for k, v in field_map.items()]),
-        question
+        question,
     )
     tried_times = 0
 
     def get_table():
         nonlocal sys_prompt, user_prompt, question, tried_times
-        sql = chat_mdl.chat(sys_prompt, [{"role": "user", "content": user_prompt}], {
-            "temperature": 0.06})
+        sql = chat_mdl.chat(
+            sys_prompt,
+            [{"role": "user", "content": user_prompt}],
+            {"temperature": 0.06},
+        )
         logging.debug(f"{question} ==> {user_prompt} get SQL: {sql}")
         sql = re.sub(r"[\r\n]+", " ", sql.lower())
         sql = re.sub(r".*select ", "select ", sql.lower())
         sql = re.sub(r" +", " ", sql)
         sql = re.sub(r"([;；]|```).*", "", sql)
-        if sql[:len("select ")] != "select ":
+        if sql[: len("select ")] != "select ":
             return None, None
         if not re.search(r"((sum|avg|max|min)\(|group by )", sql.lower()):
-            if sql[:len("select *")] != "select *":
+            if sql[: len("select *")] != "select *":
                 sql = "select doc_id,docnm_kwd," + sql[6:]
             else:
                 flds = []
@@ -406,7 +467,9 @@ Please write the SQL, only SQL, without any other explanations or text.
         """.format(
             index_name(tenant_id),
             "\n".join([f"{k}: {v}" for k, v in field_map.items()]),
-            question, sql, tbl["error"]
+            question,
+            sql,
+            tbl["error"],
         )
         tbl, sql = get_table()
         logging.debug("TRY it again: {}".format(sql))
@@ -415,24 +478,44 @@ Please write the SQL, only SQL, without any other explanations or text.
     if tbl.get("error") or len(tbl["rows"]) == 0:
         return None
 
-    docid_idx = set([ii for ii, c in enumerate(
-        tbl["columns"]) if c["name"] == "doc_id"])
-    doc_name_idx = set([ii for ii, c in enumerate(
-        tbl["columns"]) if c["name"] == "docnm_kwd"])
-    column_idx = [ii for ii in range(
-        len(tbl["columns"])) if ii not in (docid_idx | doc_name_idx)]
+    docid_idx = set(
+        [ii for ii, c in enumerate(tbl["columns"]) if c["name"] == "doc_id"]
+    )
+    doc_name_idx = set(
+        [ii for ii, c in enumerate(tbl["columns"]) if c["name"] == "docnm_kwd"]
+    )
+    column_idx = [
+        ii for ii in range(len(tbl["columns"])) if ii not in (docid_idx | doc_name_idx)
+    ]
 
     # compose Markdown table
-    columns = "|" + "|".join([re.sub(r"(/.*|（[^（）]+）)", "", field_map.get(tbl["columns"][i]["name"],
-                                                                          tbl["columns"][i]["name"])) for i in
-                              column_idx]) + ("|Source|" if docid_idx and docid_idx else "|")
+    columns = (
+        "|"
+        + "|".join(
+            [
+                re.sub(
+                    r"(/.*|（[^（）]+）)",
+                    "",
+                    field_map.get(tbl["columns"][i]["name"], tbl["columns"][i]["name"]),
+                )
+                for i in column_idx
+            ]
+        )
+        + ("|Source|" if docid_idx and docid_idx else "|")
+    )
 
-    line = "|" + "|".join(["------" for _ in range(len(column_idx))]) + \
-           ("|------|" if docid_idx and docid_idx else "")
+    line = (
+        "|"
+        + "|".join(["------" for _ in range(len(column_idx))])
+        + ("|------|" if docid_idx and docid_idx else "")
+    )
 
-    rows = ["|" +
-            "|".join([rmSpace(str(r[i])) for i in column_idx]).replace("None", " ") +
-            "|" for r in tbl["rows"]]
+    rows = [
+        "|"
+        + "|".join([rmSpace(str(r[i])) for i in column_idx]).replace("None", " ")
+        + "|"
+        for r in tbl["rows"]
+    ]
     rows = [r for r in rows if re.sub(r"[ |]+", "", r)]
     if quota:
         rows = "\n".join([r + f" ##{ii}$$ |" for ii, r in enumerate(rows)])
@@ -445,7 +528,7 @@ Please write the SQL, only SQL, without any other explanations or text.
         return {
             "answer": "\n".join([columns, line, rows]),
             "reference": {"chunks": [], "doc_aggs": []},
-            "prompt": sys_prompt
+            "prompt": sys_prompt,
         }
 
     docid_idx = list(docid_idx)[0]
@@ -457,10 +540,17 @@ Please write the SQL, only SQL, without any other explanations or text.
         doc_aggs[r[docid_idx]]["count"] += 1
     return {
         "answer": "\n".join([columns, line, rows]),
-        "reference": {"chunks": [{"doc_id": r[docid_idx], "docnm_kwd": r[doc_name_idx]} for r in tbl["rows"]],
-                      "doc_aggs": [{"doc_id": did, "doc_name": d["doc_name"], "count": d["count"]} for did, d in
-                                   doc_aggs.items()]},
-        "prompt": sys_prompt
+        "reference": {
+            "chunks": [
+                {"doc_id": r[docid_idx], "docnm_kwd": r[doc_name_idx]}
+                for r in tbl["rows"]
+            ],
+            "doc_aggs": [
+                {"doc_id": did, "doc_name": d["doc_name"], "count": d["count"]}
+                for did, d in doc_aggs.items()
+            ],
+        },
+        "prompt": sys_prompt,
     }
 
 
@@ -481,8 +571,10 @@ def relevant(tenant_id, llm_id, question, contents: list):
     contents = "Documents: \n" + "   - ".join(contents)
     contents = f"Question: {question}\n" + contents
     if num_tokens_from_string(contents) >= chat_mdl.max_length - 4:
-        contents = encoder.decode(encoder.encode(contents)[:chat_mdl.max_length - 4])
-    ans = chat_mdl.chat(prompt, [{"role": "user", "content": contents}], {"temperature": 0.01})
+        contents = encoder.decode(encoder.encode(contents)[: chat_mdl.max_length - 4])
+    ans = chat_mdl.chat(
+        prompt, [{"role": "user", "content": contents}], {"temperature": 0.01}
+    )
     if ans.lower().find("yes") >= 0:
         return True
     return False
@@ -502,7 +594,9 @@ def rewrite(tenant_id, llm_id, question):
         And return 5 versions of question and one is from translation.
         Just list the question. No other words are needed.
     """
-    ans = chat_mdl.chat(prompt, [{"role": "user", "content": question}], {"temperature": 0.8})
+    ans = chat_mdl.chat(
+        prompt, [{"role": "user", "content": question}], {"temperature": 0.8}
+    )
     return ans
 
 
@@ -522,7 +616,7 @@ Requirements:
 """
     msg = [
         {"role": "system", "content": prompt},
-        {"role": "user", "content": "Output: "}
+        {"role": "user", "content": "Output: "},
     ]
     _, msg = message_fit_in(msg, chat_mdl.max_length)
     kwd = chat_mdl.chat(prompt, msg[1:], {"temperature": 0.2})
@@ -551,7 +645,7 @@ Requirements:
 """
     msg = [
         {"role": "system", "content": prompt},
-        {"role": "user", "content": "Output: "}
+        {"role": "user", "content": "Output: "},
     ]
     _, msg = message_fit_in(msg, chat_mdl.max_length)
     kwd = chat_mdl.chat(prompt, msg[1:], {"temperature": 0.2})
@@ -626,7 +720,9 @@ Output: What's the weather in Rochester on {tomorrow}?
 {conv}
 ###############
     """
-    ans = chat_mdl.chat(prompt, [{"role": "user", "content": "Output: "}], {"temperature": 0.2})
+    ans = chat_mdl.chat(
+        prompt, [{"role": "user", "content": "Output: "}], {"temperature": 0.2}
+    )
     return ans if ans.find("**ERROR**") < 0 else messages[-1]["content"]
 
 
@@ -644,13 +740,17 @@ def ask(question, kb_ids, tenant_id):
     embedding_list = list(set([kb.embd_id for kb in kbs]))
 
     is_knowledge_graph = all([kb.parser_id == ParserType.KG for kb in kbs])
-    retriever = settings.retrievaler if not is_knowledge_graph else settings.kg_retrievaler
+    retriever = (
+        settings.retrievaler if not is_knowledge_graph else settings.kg_retrievaler
+    )
 
     embd_mdl = LLMBundle(tenant_id, LLMType.EMBEDDING, embedding_list[0])
     chat_mdl = LLMBundle(tenant_id, LLMType.CHAT)
     max_tokens = chat_mdl.max_length
     tenant_ids = list(set([kb.tenant_id for kb in kbs]))
-    kbinfos = retriever.retrieval(question, embd_mdl, tenant_ids, kb_ids, 1, 12, 0.1, 0.3, aggs=False)
+    kbinfos = retriever.retrieval(
+        question, embd_mdl, tenant_ids, kb_ids, 1, 12, 0.1, 0.3, aggs=False
+    )
     knowledges = kb_prompt(kbinfos, max_tokens)
     prompt = """
     Role: You're a smart assistant. Your name is Miss R.
@@ -672,17 +772,16 @@ def ask(question, kb_ids, tenant_id):
 
     def decorate_answer(answer):
         nonlocal knowledges, kbinfos, prompt
-        answer, idx = retriever.insert_citations(answer,
-                                                 [ck["content_ltks"]
-                                                  for ck in kbinfos["chunks"]],
-                                                 [ck["vector"]
-                                                  for ck in kbinfos["chunks"]],
-                                                 embd_mdl,
-                                                 tkweight=0.7,
-                                                 vtweight=0.3)
+        answer, idx = retriever.insert_citations(
+            answer,
+            [ck["content_ltks"] for ck in kbinfos["chunks"]],
+            [ck["vector"] for ck in kbinfos["chunks"]],
+            embd_mdl,
+            tkweight=0.7,
+            vtweight=0.3,
+        )
         idx = set([kbinfos["chunks"][int(i)]["doc_id"] for i in idx])
-        recall_docs = [
-            d for d in kbinfos["doc_aggs"] if d["doc_id"] in idx]
+        recall_docs = [d for d in kbinfos["doc_aggs"] if d["doc_id"] in idx]
         if not recall_docs:
             recall_docs = kbinfos["doc_aggs"]
         kbinfos["doc_aggs"] = recall_docs
@@ -691,7 +790,10 @@ def ask(question, kb_ids, tenant_id):
             if c.get("vector"):
                 del c["vector"]
 
-        if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
+        if (
+            answer.lower().find("invalid key") >= 0
+            or answer.lower().find("invalid api") >= 0
+        ):
             answer += " Please set LLM API-Key in 'User Setting -> Model Providers -> API-Key'"
         return {"answer": answer, "reference": refs}
 

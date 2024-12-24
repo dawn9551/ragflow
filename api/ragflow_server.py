@@ -18,7 +18,18 @@
 # from beartype.claw import beartype_all  # <-- you didn't sign up for this
 # beartype_all(conf=BeartypeConf(violation_type=UserWarning))    # <-- emit warnings from all code
 
+import sys
+import os
+
+# 获取当前脚本所在目录的父目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+
+# 将父目录添加到 Python 路径中
+sys.path.insert(0, parent_dir)
+
 from api.utils.log_utils import initRootLogger
+
 initRootLogger("ragflow_server")
 
 import logging
@@ -52,7 +63,7 @@ def update_progress():
             logging.exception("update_progress exception")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.info(r"""
         ____   ___    ______ ______ __               
        / __ \ /   |  / ____// ____// /____  _      __
@@ -61,12 +72,8 @@ if __name__ == '__main__':
     /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/                             
 
     """)
-    logging.info(
-        f'RAGFlow version: {get_ragflow_version()}'
-    )
-    logging.info(
-        f'project base: {utils.file_utils.get_project_base_directory()}'
-    )
+    logging.info(f"RAGFlow version: {get_ragflow_version()}")
+    logging.info(f"project base: {utils.file_utils.get_project_base_directory()}")
     show_configs()
     settings.init_settings()
     print_rag_settings()
@@ -94,7 +101,9 @@ if __name__ == '__main__':
         logging.info("run on debug mode")
 
     RuntimeConfig.init_env()
-    RuntimeConfig.init_config(JOB_SERVER_HOST=settings.HOST_IP, HTTP_PORT=settings.HOST_PORT)
+    RuntimeConfig.init_config(
+        JOB_SERVER_HOST=settings.HOST_IP, HTTP_PORT=settings.HOST_PORT
+    )
 
     thread = ThreadPoolExecutor(max_workers=1)
     thread.submit(update_progress)
