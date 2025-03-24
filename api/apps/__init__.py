@@ -159,7 +159,6 @@ def load_user(web_request):
     else:
         return None
 
-
 @app.teardown_request
 def _db_close(exc):
     close_connection()

@@ -568,7 +568,7 @@ class OllamaChat(Base):
         yield 0
 
 
-class LocalAIChat(Base):
+class LocalAIChat(OllamaChat):
     def __init__(self, key, model_name, base_url):
         if not base_url:
             raise ValueError("Local llm url cannot be None")
@@ -576,6 +576,20 @@ class LocalAIChat(Base):
             base_url = os.path.join(base_url, "v1")
         self.client = OpenAI(api_key="empty", base_url=base_url)
         self.model_name = model_name.split("___")[0]
+
+        # if not base_url:
+        #     raise ValueError("Local llm url cannot be None")
+        # if base_url.split("/")[-1] != "v1":
+        #     base_url = os.path.join(base_url, "v1")
+        # # 正确传递参数，将 base_url 作为关键字参数传入
+        # super().__init__(key, model_name, base_url=base_url)
+        # self.model_name = model_name.split("___")[0]
+        # if not base_url:
+        #     raise ValueError("Local llm url cannot be None")
+        # if base_url.split("/")[-1] != "v1":
+        #     base_url = os.path.join(base_url, "v1")
+        # self.client = OpenAI(api_key="empty", base_url=base_url)
+        # self.model_name = model_name.split("___")[0]
 
 
 class LocalLLM(Base):
