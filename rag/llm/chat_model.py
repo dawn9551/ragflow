@@ -843,7 +843,7 @@ class BedrockChat(Base):
     def chat(self, system, history, gen_conf):
         from botocore.exceptions import ClientError
         for k in list(gen_conf.keys()):
-            if k not in ["top_p", "max_tokens"]:
+            if k not in ["temperature"]:
                 del gen_conf[k]
         for item in history:
             if not isinstance(item["content"], list) and not isinstance(item["content"], tuple):
@@ -868,7 +868,7 @@ class BedrockChat(Base):
     def chat_streamly(self, system, history, gen_conf):
         from botocore.exceptions import ClientError
         for k in list(gen_conf.keys()):
-            if k not in ["top_p", "max_tokens"]:
+            if k not in ["temperature"]:
                 del gen_conf[k]
         for item in history:
             if not isinstance(item["content"], list) and not isinstance(item["content"], tuple):
@@ -1457,7 +1457,7 @@ class AnthropicChat(Base):
             del gen_conf["presence_penalty"]
         if "frequency_penalty" in gen_conf:
             del gen_conf["frequency_penalty"]
-        gen_conf["max_tokens"] = 8196
+        gen_conf["max_tokens"] = 8192
         if "haiku" in self.model_name or "opus" in self.model_name:
             gen_conf["max_tokens"] = 4096
 
@@ -1491,7 +1491,7 @@ class AnthropicChat(Base):
             del gen_conf["presence_penalty"]
         if "frequency_penalty" in gen_conf:
             del gen_conf["frequency_penalty"]
-        gen_conf["max_tokens"] = 8196
+        gen_conf["max_tokens"] = 8192
         if "haiku" in self.model_name or "opus" in self.model_name:
             gen_conf["max_tokens"] = 4096
 
