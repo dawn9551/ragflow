@@ -154,7 +154,7 @@ The chunking method of the dataset to create. Available options:
 The parser configuration of the dataset. A `ParserConfig` object's attributes vary based on the selected `chunk_method`:
 
 - `chunk_method`=`"naive"`:  
-  `{"chunk_token_num":128,"delimiter":"\\n!?;。；！？","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
+  `{"chunk_token_num":128,"delimiter":"\\n","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
 - `chunk_method`=`"qa"`:  
   `{"raptor": {"user_raptor": False}}`
 - `chunk_method`=`"manuel"`:  
@@ -174,7 +174,7 @@ The parser configuration of the dataset. A `ParserConfig` object's attributes va
 - `chunk_method`=`"one"`:  
   `None`
 - `chunk_method`=`"knowledge-graph"`:  
-  `{"chunk_token_num":128,"delimiter":"\\n!?;。；！？","entity_types":["organization","person","location","event","time"]}`
+  `{"chunk_token_num":128,"delimiter":"\\n","entity_types":["organization","person","location","event","time"]}`
 - `chunk_method`=`"email"`:  
   `None`
 
@@ -330,6 +330,7 @@ from ragflow_sdk import RAGFlow
 
 rag_object = RAGFlow(api_key="<YOUR_API_KEY>", base_url="http://<YOUR_BASE_URL>:9380")
 dataset = rag_object.list_datasets(name="kb_name")
+dataset = dataset[0]
 dataset.update({"embedding_model":"BAAI/bge-zh-v1.5", "chunk_method":"manual"})
 ```
 
@@ -402,7 +403,7 @@ A dictionary representing the attributes to update, with the following keys:
   - `"email"`: Email
 - `"parser_config"`: `dict[str, Any]` The parsing configuration for the document. Its attributes vary based on the selected `"chunk_method"`:
   - `"chunk_method"`=`"naive"`:  
-    `{"chunk_token_num":128,"delimiter":"\\n!?;。；！？","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
+    `{"chunk_token_num":128,"delimiter":"\\n","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
   - `chunk_method`=`"qa"`:  
     `{"raptor": {"user_raptor": False}}`
   - `chunk_method`=`"manuel"`:  
@@ -422,7 +423,7 @@ A dictionary representing the attributes to update, with the following keys:
   - `chunk_method`=`"one"`:  
     `None`
   - `chunk_method`=`"knowledge-graph"`:  
-    `{"chunk_token_num":128,"delimiter":"\\n!?;。；！？","entity_types":["organization","person","location","event","time"]}`
+    `{"chunk_token_num":128,"delimiter":"\\n","entity_types":["organization","person","location","event","time"]}`
   - `chunk_method`=`"email"`:  
     `None`
 
@@ -542,7 +543,7 @@ A `Document` object contains the following attributes:
 - `status`: `str` Reserved for future use.
 - `parser_config`: `ParserConfig` Configuration object for the parser. Its attributes vary based on the selected `chunk_method`:
   - `chunk_method`=`"naive"`:  
-    `{"chunk_token_num":128,"delimiter":"\\n!?;。；！？","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
+    `{"chunk_token_num":128,"delimiter":"\\n","html4excel":False,"layout_recognize":True,"raptor":{"user_raptor":False}}`.
   - `chunk_method`=`"qa"`:  
     `{"raptor": {"user_raptor": False}}`
   - `chunk_method`=`"manuel"`:  
@@ -562,7 +563,7 @@ A `Document` object contains the following attributes:
   - `chunk_method`=`"one"`:  
     `None`
   - `chunk_method`=`"knowledge-graph"`:  
-    `{"chunk_token_num":128,"delimiter": "\\n!?;。；！？","entity_types":["organization","person","location","event","time"]}`
+    `{"chunk_token_num":128,"delimiter": "\\n","entity_types":["organization","person","location","event","time"]}`
   - `chunk_method`=`"email"`:  
     `None`
 
@@ -891,11 +892,11 @@ The user query or query keywords. Defaults to `""`.
 
 ##### dataset_ids: `list[str]`, *Required*
 
-The IDs of the datasets to search. Defaults to `None`. If you do not set this argument, ensure that you set `document_ids`.
+The IDs of the datasets to search. Defaults to `None`. 
 
 ##### document_ids: `list[str]`
 
-The IDs of the documents to search. Defaults to `None`. You must ensure all selected documents use the same embedding model. Otherwise, an error will occur. If you do not set this argument, ensure that you set `dataset_ids`.
+The IDs of the documents to search. Defaults to `None`. You must ensure all selected documents use the same embedding model. Otherwise, an error will occur. 
 
 ##### page: `int`
 

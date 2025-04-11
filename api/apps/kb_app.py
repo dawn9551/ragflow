@@ -73,7 +73,7 @@ def create():
 
 @manager.route('/update', methods=['post'])  # noqa: F821
 @login_required
-@validate_request("kb_id", "name", "description", "permission", "parser_id")
+@validate_request("kb_id", "name", "description", "parser_id")
 @not_allowed_parameters("id", "tenant_id", "created_by", "create_time", "update_time", "create_date", "update_date", "created_by")
 def update():
     req = request.json
@@ -323,3 +323,17 @@ def knowledge_graph(kb_id):
             filtered_edges = [o for o in obj["graph"]["edges"] if o["source"] != o["target"] and o["source"] in node_id_set and o["target"] in node_id_set]
             obj["graph"]["edges"] = sorted(filtered_edges, key=lambda x: x.get("weight", 0), reverse=True)[:128]
     return get_json_result(data=obj)
+
+@manager.route('/<kb_id>/knowledge_graph', methods=['DELETE'])  # noqa: F821
+@login_required
+def delete_knowledge_graph(kb_id):
+    if not KnowledgebaseService.accessible(kb_id, current_user.id):
+        return get_json_result(
+            data=False,
+            message='No authorization.',
+            code=settings.RetCode.AUTHENTICATION_ERROR
+        )
+    _, kb = KnowledgebaseService.get_by_id(kb_id)
+    settings.docStoreConn.delete({"knowledge_graph_kwd": ["graph", "subgraph", "entity", "relation"]}, search.index_name(kb.tenant_id), kb_id)
+
+    return get_json_result(data=True)

@@ -17,11 +17,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from common import (
-    INVALID_API_TOKEN,
-    batch_add_chunks,
-    list_chunks,
-)
+from common import INVALID_API_TOKEN, batch_add_chunks, list_chunks
 from libs.auth import RAGFlowHttpApiAuth
 
 
@@ -37,9 +33,8 @@ class TestAuthorization:
             ),
         ],
     )
-    def test_invalid_auth(self, get_dataset_id_and_document_id, auth, expected_code, expected_message):
-        dataset_id, document_id = get_dataset_id_and_document_id
-        res = list_chunks(auth, dataset_id, document_id)
+    def test_invalid_auth(self, auth, expected_code, expected_message):
+        res = list_chunks(auth, "dataset_id", "document_id")
         assert res["code"] == expected_code
         assert res["message"] == expected_message
 
@@ -110,8 +105,8 @@ class TestChunksList:
         [
             (None, 0, 5, ""),
             ("", 0, 5, ""),
-            pytest.param(lambda r: r[0], 0, 1, "", marks=pytest.mark.skip(reason="issues/6499")),
-            pytest.param("unknown", 102, 0, "You don't own the document unknown.txt.", marks=pytest.mark.skip(reason="issues/6500")),
+            pytest.param(lambda r: r[0], 0, 1, "", marks=pytest.mark.skipif(os.getenv("DOC_ENGINE") == "infinity", reason="issues/6499")),
+            pytest.param("unknown", 100, 0, """AttributeError("\'NoneType\' object has no attribute \'keys\'")""", marks=pytest.mark.skip),
         ],
     )
     def test_id(
@@ -154,8 +149,9 @@ class TestChunksList:
         assert all(r["code"] == 0 for r in responses)
         assert all(len(r["data"]["chunks"]) == 5 for r in responses)
 
-    def test_default(self, get_http_api_auth, get_dataset_id_and_document_id):
-        dataset_id, document_id = get_dataset_id_and_document_id
+    def test_default(self, get_http_api_auth, add_document):
+        dataset_id, document_id = add_document
+
         res = list_chunks(get_http_api_auth, dataset_id, document_id)
         chunks_count = res["data"]["doc"]["chunk_count"]
         batch_add_chunks(get_http_api_auth, dataset_id, document_id, 31)
